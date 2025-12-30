@@ -83,6 +83,8 @@ def plot_fit(wave, flux, model, weight=None, error=None, ax=None, axr=None, xlim
                 continue
             if 'tau_0' in m.param_names:
                 continue
+            if 't' in m.param_names:
+                continue
             
             if m_multi is not None:
                 y = m(wave_model) * m_multi

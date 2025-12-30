@@ -1,3 +1,4 @@
+from email.policy import default
 import numpy as np
 from astropy.modeling.core import Fittable1DModel
 from astropy.modeling.parameters import Parameter
@@ -7,9 +8,11 @@ from scipy.ndimage import gaussian_filter1d
 from astropy.convolution import convolve, convolve_fft
 from .constants import ls_km
 from .utils import line_wave_dict
+from pcygni_profile import pcygni_profile as pcp
+import astropy.units as units
 
 
-__all__ = ['Line_Gaussian', 'Line_Exponential', 'Line_Absorption', 'Line_GaussHermite', 'Line_template', 
+__all__ = ['Line_Gaussian', 'Line_Exponential', 'Line_Pcygni', 'Line_Absorption', 'Line_GaussHermite', 'Line_template', 
            'Line_MultiGauss', 'Line_MultiGauss_doublet',
            'tier_line_ratio', 
            'tier_line_sigma', 'tier_wind_dv', 'tier_abs_dv', 'find_line_peak', 
@@ -90,6 +93,86 @@ class Line_Exponential(Fittable1DModel):
         dv_samp_idx=np.argmin(np.abs(v - dv))
         f= gaussian_filter1d(f_exp, sigma/(v[dv_samp_idx]-v[dv_samp_idx-1]))
         #f = convolve_fft(f_exp, f_gaus, normalize_kernel=True, boundary='wrap')
+
+        return f
+    
+class Line_Pcygni(Fittable1DModel):
+    '''
+    The P-Cygni line profile adopted from https://github.com/unoebauer/public-astro-tools. 
+    Fitting is done using flux per unit wavelength.
+    All velocitys are expressed in unit of light speed and sampled in log scale. 
+    Wavelength in unit of Angstrom.
+
+    Parameters
+    ----------
+    t: float
+        time since explosion (default 3000 secs)
+    log_vmax: float
+        velocity at the outer ejecta edge (with t, can be turned into r) (1% c)
+    log_vphot: float
+        velocity, i.e. location, of the photosphere (0.1% c)
+    log_vref: float
+        reference velocity, used in the density law (500 km/s)
+    log_ve: float
+        another parameter for the density law (500 km/s)
+    log_tauref: float
+        reference optical depth of the line transition (at vref) (1)
+    wavec: float
+        rest frame natural wavelength of the line transition (1215.7 Angstrom)
+    vdet_min: float
+        inner location of the detached line-formation shell; if None, will be set to vphot (None)
+    vdet_max: float
+        outer location of the detached line-formation shell; if None, will be set to vmax (None)
+
+    **Note** that you have to supply astropy quantities (i.e. numbers with units) for all these parameters (except for the reference optical depth).
+    '''
+
+    t = Parameter(default=3000, bounds=(1, None))
+    #vmax = Parameter(default=0.01*ls_km, bounds=(1, ls_km))
+    log_vmax = Parameter(default=-2, bounds=(-10, 0))
+    #vphot = Parameter(default=0.001*ls_km, bounds=(1, ls_km))
+    log_vphot = Parameter(default=-3, bounds=(-10, 0))
+    #vref = Parameter(default=500, bounds=(1, ls_km))
+    log_vref = Parameter(default=-2.78, bounds=(-10, 0))
+    #ve = Parameter(default=500, bounds=(1, ls_km))
+    log_ve = Parameter(default=-2.78, bounds=(-10, 0))
+    dv = Parameter(default=0, bounds=(-2000, 2000))
+    wavec = Parameter(default=line_wave_dict['Halpha'], fixed=True)
+    #tauref = Parameter(default=1, bounds=(0, None))
+    log_tauref = Parameter(default=2, bounds=(-6, 6))
+    #vdet_min = Parameter(default=None, bounds=(0, None))
+    #vdet_max = Parameter(default=None, bounds=(0, None))
+
+    @staticmethod
+    def evaluate(x, t, log_vmax, log_vphot, log_vref, log_ve, dv, wavec, log_tauref):
+        """
+        P-Cygni model function.
+        """
+        
+        '''t      = np.asarray(t)[0]
+        vmax   = np.asarray(vmax)[0]
+        vphot  = np.asarray(vphot)[0]
+        vref   = np.asarray(vref)[0]
+        ve     = np.asarray(ve)[0]
+        tauref = np.asarray(tauref)[0]
+        wavec  = np.asarray(wavec)[0]'''
+
+        #v = (x - wavec) / wavec * ls_km  # convert to velocity (km/s)
+        #print(t, vmax, vphot, vref, ve, tauref, wavec)
+        lam0= wavec * (1 + (dv / ls_km))  # shift the central wavelength by dv
+        vmax=ls_km * 10**log_vmax
+        vphot=ls_km * 10**log_vphot
+        vref=ls_km * 10**log_vref
+        ve=ls_km * 10**log_ve
+        tauref=10**log_tauref
+
+        tmp=pcp.PcygniCalculator(t=t, vmax=vmax, vphot=vphot,\
+                                 vref=vref, ve=ve, tauref=tauref, \
+                                 lam0=lam0,\
+                                 vdet_min=None,\
+                                 vdet_max=None)
+        
+        x_calc, f = tmp.calc_profile_Flam(npoints=25, lam_grid=x) # calculate with higher resolution 10 times than the data
 
         return f
 
