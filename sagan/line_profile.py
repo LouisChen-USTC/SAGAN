@@ -10,9 +10,11 @@ from .constants import ls_km
 from .utils import line_wave_dict
 from pcygni_profile import pcygni_profile as pcp
 import astropy.units as units
+import pickle
 
 
-__all__ = ['Line_Gaussian', 'Line_Exponential', 'Line_Pcygni', 'Line_Absorption', 'Line_GaussHermite', 'Line_template', 
+__all__ = ['Line_Gaussian', 'Line_Exponential', 'Line_Pcygni', 'Line_Pcygni_direct', \
+           'Line_Absorption', 'Line_Absorption_log_tau', 'Line_GaussHermite', 'Line_template', 
            'Line_MultiGauss', 'Line_MultiGauss_doublet',
            'tier_line_ratio', 
            'tier_line_sigma', 'tier_wind_dv', 'tier_abs_dv', 'find_line_peak', 
@@ -95,8 +97,89 @@ class Line_Exponential(Fittable1DModel):
         #f = convolve_fft(f_exp, f_gaus, normalize_kernel=True, boundary='wrap')
 
         return f
-    
+
 class Line_Pcygni(Fittable1DModel):
+    '''
+    The P-Cygni line profile adopted from https://github.com/unoebauer/public-astro-tools. 
+    Fitting is done using flux per unit wavelength.
+    All velocitys are expressed in unit of light speed and sampled in log scale. 
+    Wavelength in unit of Angstrom.
+    Line profiles are not directly calculated from first principles, but rather interpolated from a precalculated grid 
+        to speed up the calculation.
+
+    Parameters
+    ----------
+    t: float
+        time since explosion (default 3000 secs and fixed)
+    log_vmax: float
+        velocity at the outer ejecta edge (with t, can be turned into r) (1% c)
+    log_vphot: float
+        velocity, i.e. location, of the photosphere (0.1% c)
+    log_vref: float
+        reference velocity, used in the density law (500 km/s)
+    log_ve: float
+        another parameter for the density law (500 km/s)
+    log_tauref: float
+        reference optical depth of the line transition (at vref) (1)
+    wavec: float
+        rest frame natural wavelength of the line transition (1215.7 Angstrom)
+    vdet_min: float
+        inner location of the detached line-formation shell; if None, will be set to vphot (None)
+    vdet_max: float
+        outer location of the detached line-formation shell; if None, will be set to vmax (None)
+
+    **Note** that you have to supply astropy quantities (i.e. numbers with units) for all these parameters (except for the reference optical depth).
+    '''
+    #t = Parameter(default=3000, bounds=(1, None))
+    log_vmax = Parameter(default=-1.5, bounds=(-3, -1))
+    log_vphot = Parameter(default=-2.5, bounds=(-3, -1))
+    #log_vref = Parameter(default=-2.78, bounds=(-10, 0))
+    log_ve = Parameter(default=-2.78, bounds=(-3, -1))
+    dv = Parameter(default=0, bounds=(-2000, 2000))
+    wavec = Parameter(default=line_wave_dict['Halpha'], fixed=True)
+    #R_sigma_dv = Parameter(default=100, fixed=True)
+    log_tauref = Parameter(default=2, bounds=(0, 4))
+
+    with open('pcygni_Halpha_interpolator.pkl','rb') as f:
+        interp_func=pickle.load(f)
+    dv_range=10000
+    wv_min, wv_max=line_wave_dict['Halpha']*(1 - dv_range/ls_km), line_wave_dict['Halpha']*(1 + dv_range/ls_km)
+    wv_list=np.linspace(wv_min, wv_max, 500)
+    dv_list=np.linspace( -dv_range, dv_range, 500)
+
+    @staticmethod
+    def evaluate(x, log_vmax, log_vphot, log_ve, dv, wavec, log_tauref):
+        """
+        P-Cygni model function.
+        """
+        
+        '''t      = np.asarray(t)[0]
+        vmax   = np.asarray(vmax)[0]
+        vphot  = np.asarray(vphot)[0]
+        vref   = np.asarray(vref)[0]
+        ve     = np.asarray(ve)[0]
+        tauref = np.asarray(tauref)[0]
+        wavec  = np.asarray(wavec)[0]'''
+        log_vmax=np.asarray(log_vmax)[0]
+        log_vphot=np.asarray(log_vphot)[0]
+        log_ve=np.asarray(log_ve)[0]
+        log_tauref=np.asarray(log_tauref)[0]
+
+        spec_interp=Line_Pcygni.interp_func([[log_vmax, log_vphot, log_ve, log_tauref]])[0]
+
+        lam0= wavec * (1 + (dv / ls_km))  # shift the central wavelength by dv
+        v= (x - lam0) / lam0 * ls_km  # convert to velocity (km/s)
+
+        spec_interp_grid_interpolat=interp1d(Line_Pcygni.dv_list, spec_interp, bounds_error=False, fill_value=1.0)
+        spec_model_on_grid= spec_interp_grid_interpolat(v)
+
+        #dv_samp_idx=np.argmin(np.abs(v - dv))
+        #spec_model_on_grid= gaussian_filter1d(spec_model_on_grid, R_sigma_dv/(v[dv_samp_idx]-v[dv_samp_idx-1]))
+
+        return spec_model_on_grid
+
+
+class Line_Pcygni_direct(Fittable1DModel):
     '''
     The P-Cygni line profile adopted from https://github.com/unoebauer/public-astro-tools. 
     Fitting is done using flux per unit wavelength.
@@ -209,6 +292,44 @@ class Line_Absorption(Fittable1DModel):
         """
         v = (x - wavec) / wavec * ls_km  # convert to velocity (km/s)
         #tau_v = tau_0 * (1/(sigma * np.sqrt(2 * np.pi))) * np.exp(-0.5 * ((v - dv)/ sigma)**2)
+        tau_v = tau_0 * np.exp(-0.5 * ((v - dv)/ sigma)**2)
+        f = 1 - Cf + Cf* np.exp(-1*tau_v)
+
+        return f
+    
+class Line_Absorption_log_tau(Fittable1DModel):
+    '''
+    The absorption line profile with the sigma as the velocity.
+    Parameters
+    ----------
+    x : array like
+        Wavelength, units: arbitrary.
+    log_tau_0 : float
+        The log optical depth at line center.
+    dv : float
+        The velocity of the central line offset from wavec, units: km/s.
+    sigma : float
+        The velocity dispersion of the line profile, units: km/s.
+    wavec : float
+        The central wavelength of the line profile, units: same as x.
+    Cf : float
+        The covering fraction of the absorbing gas, between 0 and 1.
+    '''
+
+    log_tau0 = Parameter(default=0, bounds=(None, 2))
+    dv = Parameter(default=0, bounds=(-2000, 2000))
+    sigma = Parameter(default=200, bounds=(20, 10000))
+    Cf = Parameter(default=1, bounds=(0, 1))
+
+    wavec = Parameter(default=5000, fixed=True)
+
+    @staticmethod
+    def evaluate(x, log_tau0, dv, sigma, Cf, wavec):
+        """
+        Absorption Gaussian model function.
+        """
+        tau_0 = 10**log_tau0
+        v = (x - wavec) / wavec * ls_km  # convert to velocity (km/s)
         tau_v = tau_0 * np.exp(-0.5 * ((v - dv)/ sigma)**2)
         f = 1 - Cf + Cf* np.exp(-1*tau_v)
 

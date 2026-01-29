@@ -26,22 +26,28 @@ package_path = splitter.join(pathList[:-1])
 
 # Wavelengths of the typical emission lines
 line_wave_dict = {
-    'Halpha': 6562.819,
-    'Hbeta': 4861.333,
-    'Hgamma': 4340.471,
-    'OIII_4959': 4958.911,
-    'OIII_5007': 5006.843,
-    #'SII_6718': 6716.440,
-    #'SII_6733': 6730.810,
-    'SII_6718': 6717.7,
-    'SII_6733': 6731.3,
-    'NII_6548': 6548.050,
-    'NII_6583': 6583.460,
-    'HeII_4686': 4685.710,
-    'OIII_4363': 4363.210,
-    'OI_6300': 6300.23,
-    'MgII_2799': 2799.117,
-    'CIV_1548': 1549.80
+    'Halpha': 6564.61,
+    'Hbeta': 4862.68,
+    'Hgamma': 4341.68,
+    'Hdelta': 4102.89,
+    'OIII_4959': 4960.295,
+    'OIII_5007': 5008.239,
+    'SII_6718': 6718.29,
+    'SII_6733': 6732.67,
+    'NII_6548': 6549.86,
+    'NII_6583': 6585.27,
+    'HeI_3889': 3889,
+    # These lines wavelength are uncorrected:
+    'HeII_4686': 4686,
+    'HeI_4471': 4471,
+    'HeI_4713': 4713,
+    'HeI_4922': 4922,
+    'HeI_5016': 5016,
+    'NI_5199': 5199,
+    'NI_5201': 5201,
+    'FeVI_5176': 5176,
+    ##
+    'OIII_4363': 4364.436,
     }
 
 # Labels of the typical emission lines

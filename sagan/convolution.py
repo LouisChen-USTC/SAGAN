@@ -100,8 +100,8 @@ def decorate_gaussian_convolution_1d_inplace(
     def _sigma_pix_from_x(x: Any) -> float:
         xv, _ = _x_to_value_and_unit(x)
         ok, dx = _is_uniform(xv, rtol=cfg.uniform_rtol)
-        if not ok:
-            raise ValueError("x must be uniformly spaced for this decorator (uniform grid required).")
+        #if not ok:
+        #    raise ValueError("x must be uniformly spaced for this decorator (uniform grid required).")
         return 0.0 if sigma_x <= 0 else sigma_x / dx
 
     def __call__(self, x, *args, **kwargs):
