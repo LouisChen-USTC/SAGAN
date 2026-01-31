@@ -22,7 +22,9 @@ __all__ = ['Line_Gaussian', 'Line_Exponential', 'Line_Pcygni', 'Line_Pcygni_dire
            'gen_o3doublet_gausshermite', 'gen_s2doublet_gausshermite',
            'fix_profile_multigauss', 'fix_profile_gausshermite', 'get_line_multigaussian']
 
-           
+
+pcygni_temp_path = '/home/changhaochen/Documents/pcygni_profile_templates/'
+
 class Line_Gaussian(Fittable1DModel):
     '''
     The Gaussian line profile with the sigma as the velocity.
@@ -140,7 +142,7 @@ class Line_Pcygni(Fittable1DModel):
     #R_sigma_dv = Parameter(default=100, fixed=True)
     log_tauref = Parameter(default=2, bounds=(0, 4))
 
-    with open('pcygni_Halpha_interpolator.pkl','rb') as f:
+    with open(pcygni_temp_path + 'pcygni_Halpha_interpolator.pkl','rb') as f:
         interp_func=pickle.load(f)
     dv_range=10000
     wv_min, wv_max=line_wave_dict['Halpha']*(1 - dv_range/ls_km), line_wave_dict['Halpha']*(1 + dv_range/ls_km)
