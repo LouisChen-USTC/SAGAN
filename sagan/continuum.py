@@ -5,6 +5,7 @@ import astropy.units as u
 from astropy.modeling import models
 import pickle
 from .constants import ls_km
+import os
 
 try:
     import extinction
@@ -62,7 +63,9 @@ class lrd_sphere(Fittable1DModel):
     log_rou = Parameter(default=12, bounds=(11, 13))  # in log(g cm^-3)
     log_Mbh = Parameter(default=6, fixed=True)  # in log(Msun)
 
-    with open('Hanpu_sphere_model_interp_func.pkl', 'rb') as f:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    sphere_model_pkl_path=os.path.join(script_dir, 'Hanpu_sphere_model_interp_func.pkl')
+    with open(sphere_model_pkl_path, 'rb') as f:
         spec_interp_dict = pickle.load(f)
 
     from scipy.interpolate import RegularGridInterpolator
